@@ -51,8 +51,9 @@ ControllerInput Read_Controller() {
   int Hat;
   int Twist;
   int Slider;
+  int Button;
 
-  Joystick.Get_Values(X_Value, Y_Value, Hat, Twist, Slider, Input.Button);
+  Joystick.Get_Values(X_Value, Y_Value, Hat, Twist, Slider, Button);
 
   if (Controller_Mode == Controller_USB) {
     if (X_Value < 499 || X_Value > 520) Input.X = Map_Value(X_Value, 0, 1023, -1, 1);
@@ -75,6 +76,15 @@ ControllerInput Read_Controller() {
   else Input.X = 0;
 
   Input.Speed = constrain(Map_Value(Slider, 0, 255, 0, 1), 0, 1);
+
+  if (Button == 1) {
+    Input.Menu == Default_Menu;
+  }
+  if (Button == 2) {
+    Input.Menu == PSD_Info_Menu;
+  }
+
+  Input.Button = Button;
   return Input;
 }
 

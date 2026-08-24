@@ -47,27 +47,37 @@ void Setup_Display() {
 }
 
 // Update joystick position and motor values on the TFT
-void Update_Display(const ControllerInput &Input, int Front_Left, int Front_Right,
-  int Back_Left, int Back_Right) {
+void Update_Display(const ControllerInput &Input, int Front_Left, int Front_Right, int Back_Left, int Back_Right) {
   static unsigned long Update_Timer = 0;
   if (millis() - Update_Timer < 200) return;
   Update_Timer = millis();
 
-  TFT.fillRect(94, 29, 53, 75, TFT_BLACK);
-  TFT.drawCircle(120, 67, 27, TFT_WHITE);
-  TFT.fillCircle(120 + Input.X * 17, 67 - Input.Y * 17, 5, TFT_RED);
+  // PSD info menu
+  if (Input.Menu == PSD_Info_Menu) {
+    TFT.fillRect(94, 29, 53, 75, TFT_BLACK);
+    TFT.setCursor(5, 5);
+    TFT.setTextSize(3);
+    TFT.print("Testing PSD menu");
+  }
+  
+  // Default menu
+  else {
+    TFT.fillRect(94, 29, 53, 75, TFT_BLACK);
+    TFT.drawCircle(120, 67, 27, TFT_WHITE);
+    TFT.fillCircle(120 + Input.X * 17, 67 - Input.Y * 17, 5, TFT_RED);
 
-  TFT.fillRect(0, 0, 46, 135, TFT_BLACK);
-  TFT.setCursor(0, 25);
-  TFT.print(Front_Left);
-  TFT.setCursor(0, 90);
-  TFT.print(Back_Left);
+    TFT.fillRect(0, 0, 46, 135, TFT_BLACK);
+    TFT.setCursor(0, 25);
+    TFT.print(Front_Left);
+    TFT.setCursor(0, 90);
+    TFT.print(Back_Left);
 
-  TFT.fillRect(185, 0, 55, 135, TFT_BLACK);
-  TFT.setCursor(185, 25);
-  TFT.print(Front_Right);
-  TFT.setCursor(185, 90);
-  TFT.print(Back_Right);
+    TFT.fillRect(185, 0, 55, 135, TFT_BLACK);
+    TFT.setCursor(185, 25);
+    TFT.print(Front_Right);
+    TFT.setCursor(185, 90);
+    TFT.print(Back_Right);
+  }
 }
 
 // Colour blocked wheels and show the collision warning

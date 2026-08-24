@@ -8,6 +8,9 @@
 void setup() {
   Serial.begin(115200);
   Serial.println("Booting");
+  delay(500);
+  Print_Reset_Reason();
+  delay(500);
 
   Setup_Motors();
   Setup_Display();
@@ -17,8 +20,10 @@ void setup() {
 
 void loop() {
   Update_Controllers();
-  
+
   ControllerInput Input = Read_Controller();
+  Read_Sensors();
+
   int Front_Left;
   int Front_Right;
   int Back_Left;

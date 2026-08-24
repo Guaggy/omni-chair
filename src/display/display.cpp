@@ -2,8 +2,19 @@
 
 #include <Arduino.h>
 #include <TFT_eSPI.h>
+#include "config.h"
+#include "controller.h"
+#include "safety/safety.h"
+#include "sensors/collision_sensors.h"
 
 static TFT_eSPI TFT(135, 240);
+static TFT_eSprite Display_Sprite(&TFT);
+static unsigned long Display_Update_Timer = 0;
+
+static bool Display_Collision_Forward = false;
+static bool Display_Collision_Left = false;
+static bool Display_Collision_Right = false;
+static bool Display_Collision_Back = false;
 
 const int Wheel_Left_X = 64;
 const int Wheel_Right_X = 155;
@@ -13,92 +24,169 @@ const int Wheel_Width = 23;
 const int Wheel_Height = 43;
 
 static void Draw_Wheel(int X, int Y, bool Direction, uint16_t Color) {
-  TFT.drawRect(X, Y, Wheel_Width, Wheel_Height, Color);
+  Display_Sprite.drawRect(X, Y, Wheel_Width, Wheel_Height, Color);
   int Step = Wheel_Height / 3;
 
   for (int i = 0; i < 3; i++) {
     if (Direction) {
-      TFT.drawLine(X, Y + i * Step, X + Wheel_Width, Y + (i + 1) * Step, Color);
+      Display_Sprite.drawLine(X, Y + i * Step, X + Wheel_Width,
+        Y + (i + 1) * Step, Color);
     } else {
-      TFT.drawLine(X, Y + (i + 1) * Step, X + Wheel_Width, Y + i * Step, Color);
+      Display_Sprite.drawLine(X, Y + (i + 1) * Step, X + Wheel_Width,
+        Y + i * Step, Color);
     }
   }
 }
 
-// Set up the TFT and draw the wheelchair outline
-void Setup_Display() {
-  TFT.init();
-  TFT.setRotation(3);
-  TFT.fillScreen(TFT_BLACK);
-  TFT.setTextColor(TFT_WHITE);
-  TFT.setSwapBytes(true);
+// Draw the normal driving screen
+static void Draw_Default_Menu(const ControllerInput &Input, int Front_Left,
+  int Front_Right, int Back_Left, int Back_Right) {
+  uint16_t Front_Left_Color = Display_Collision_Forward || Display_Collision_Left ? TFT_RED : TFT_WHITE;
+  uint16_t Front_Right_Color = Display_Collision_Forward || Display_Collision_Right ? TFT_RED : TFT_WHITE;
+  uint16_t Back_Left_Color = Display_Collision_Left || Display_Collision_Back ? TFT_RED : TFT_WHITE;
+  uint16_t Back_Right_Color = Display_Collision_Right || Display_Collision_Back ? TFT_RED : TFT_WHITE;
 
+  Display_Sprite.setTextDatum(TL_DATUM);
+  Display_Sprite.setTextColor(TFT_WHITE);
+
+  // Robot body and wheels
+  Display_Sprite.drawRect(93, 28, 55, 77, TFT_WHITE);
+  Draw_Wheel(Wheel_Left_X, Wheel_Front_Y, true, Front_Left_Color);
+  Draw_Wheel(Wheel_Left_X, Wheel_Back_Y, false, Back_Left_Color);
+  Draw_Wheel(Wheel_Right_X, Wheel_Front_Y, false, Front_Right_Color);
+  Draw_Wheel(Wheel_Right_X, Wheel_Back_Y, true, Back_Right_Color);
+
+  // Joystick position
+  Display_Sprite.drawCircle(120, 67, 27, TFT_WHITE);
+  Display_Sprite.fillCircle(120 + Input.X * 17, 67 - Input.Y * 17, 5, TFT_RED);
+
+  // Motor values
+  Display_Sprite.setTextSize(2);
+  Display_Sprite.setCursor(10, 25);
+  Display_Sprite.print(Front_Left);
+  Display_Sprite.setCursor(10, 90);
+  Display_Sprite.print(Back_Left);
+  Display_Sprite.setCursor(195, 25);
+  Display_Sprite.print(Front_Right);
+  Display_Sprite.setCursor(195, 90);
+  Display_Sprite.print(Back_Right);
+
+  if (Display_Collision_Forward || Display_Collision_Left ||
+      Display_Collision_Right || Display_Collision_Back) {
+    Display_Sprite.setTextDatum(MC_DATUM);
+    Display_Sprite.setTextColor(TFT_RED);
+    Display_Sprite.drawString("COLLISION ON!", 120, 125);
+  }
+}
+
+// Show the latest stored PSD distances
+static void Draw_PSD_Menu() {
+  Display_Sprite.setTextDatum(TL_DATUM);
+  Display_Sprite.setTextColor(TFT_WHITE);
+  Display_Sprite.setTextSize(2);
+  Display_Sprite.setCursor(5, 5);
+  Display_Sprite.print("PSD distances (cm):");
+  Display_Sprite.drawLine(0, 30, 239, 30, TFT_WHITE);
+
+  PSD_Distances Distances = Get_PSD_Distances();
+  Display_Sprite.setCursor(5, 32);
+  Display_Sprite.printf("FL: %d", Distances.Front_Left);
+  Display_Sprite.setCursor(150, 32);
+  Display_Sprite.printf("R: %d", Distances.Front_Right);
+  Display_Sprite.setCursor(5, 62);
+  Display_Sprite.printf("SL:  %d", Distances.Side_Left);
+  Display_Sprite.setCursor(150, 62);
+  Display_Sprite.printf("SR: %d", Distances.Side_Right);
+  Display_Sprite.setCursor(5, 92);
+  Display_Sprite.printf("B: %d", Distances.Back);
+}
+
+// Keep the unfinished LiDAR menu as a placeholder
+static void Draw_LiDAR_Menu() {
+  Display_Sprite.setTextColor(TFT_WHITE);
+  Display_Sprite.setTextDatum(MC_DATUM);
+  Display_Sprite.setTextSize(3);
+  Display_Sprite.drawString("LIDAR", 120, 45);
+  Display_Sprite.setTextSize(2);
+  Display_Sprite.drawString("Not implemented", 120, 85);
+}
+
+// Draw the existing runtime variable screen
+static void Draw_Variable_Menu() {
+  Display_Sprite.setTextDatum(TL_DATUM);
+  Display_Sprite.setTextSize(2);
+  Display_Sprite.setTextColor(TFT_RED);
+  Display_Sprite.setCursor(5, 5);
+  Display_Sprite.print("Variables");
+  Display_Sprite.drawLine(0, 30, 239, 30, TFT_WHITE);
+
+  Display_Sprite.setTextColor(TFT_WHITE);
+  Display_Sprite.setCursor(5, 32);
+  Display_Sprite.printf("Collision Enabled: %s", Collision_Enabled ? "ON" : "OFF");
+  Display_Sprite.setCursor(5, 62);
+  Display_Sprite.printf("Motor Enabled: %s", Motors_Are_Enabled() ? "ON" : "OFF");
+  Display_Sprite.setCursor(5, 92);
+  Display_Sprite.print("Controller: ");
+
+  ControllerMode Mode = Get_Controller_Mode();
+  if (Mode == Controller_PS3) Display_Sprite.print("PS3");
+  else if (Mode == Controller_Bluetooth) Display_Sprite.print("BT");
+  else Display_Sprite.print("USB");
+}
+
+// Set up the TFT and full-screen sprite
+void Setup_Display() {
   if (TFT_BL > 0) {
     pinMode(TFT_BL, OUTPUT);
     digitalWrite(TFT_BL, HIGH);
   }
 
-  TFT.drawRect(93, 28, 55, 77, TFT_WHITE);
-  TFT.drawCircle(120, 67, 27, TFT_WHITE);
-  Draw_Wheel(Wheel_Left_X, Wheel_Front_Y, true, TFT_WHITE);
-  Draw_Wheel(Wheel_Left_X, Wheel_Back_Y, false, TFT_WHITE);
-  Draw_Wheel(Wheel_Right_X, Wheel_Front_Y, false, TFT_WHITE);
-  Draw_Wheel(Wheel_Right_X, Wheel_Back_Y, true, TFT_WHITE);
+  TFT.init();
+  TFT.setRotation(3);
+  TFT.fillScreen(TFT_BLACK);
+  TFT.setSwapBytes(true);
+
+  Display_Sprite.setColorDepth(8);
+  Display_Sprite.createSprite(240, 135);
+  Display_Sprite.fillSprite(TFT_BLACK);
+  Display_Sprite.setTextColor(TFT_GREEN);
+  Display_Sprite.setTextSize(2);
+  Display_Sprite.setCursor(10, 20);
+  Display_Sprite.println("OMNI Chair V3");
+  Display_Sprite.setTextColor(TFT_WHITE);
+  Display_Sprite.setTextSize(1);
+  Display_Sprite.setCursor(10, 60);
+  Display_Sprite.println("Boot OK");
+  Display_Sprite.pushSprite(0, 0);
+  delay(1000);
 }
 
-// Update joystick position and motor values on the TFT
-void Update_Display(const ControllerInput &Input, int Front_Left, int Front_Right, int Back_Left, int Back_Right) {
-  static unsigned long Update_Timer = 0;
-  if (millis() - Update_Timer < 200) return;
-  Update_Timer = millis();
+// Clear, draw and push one complete menu frame
+void Update_Display(const ControllerInput &Input, int Front_Left, int Front_Right,
+  int Back_Left, int Back_Right) {
+  if (millis() - Display_Update_Timer < Display_Update_Time) return;
+  Display_Update_Timer = millis();
 
-  // PSD info menu
+  Display_Sprite.fillSprite(TFT_BLACK);
+
   if (Input.Menu == PSD_Info_Menu) {
-    TFT.fillRect(94, 29, 53, 75, TFT_BLACK);
-    TFT.setCursor(5, 5);
-    TFT.setTextSize(3);
-    TFT.print("Testing PSD menu");
+    Draw_PSD_Menu();
+  } else if (Input.Menu == LiDAR_Info_Menu) {
+    Draw_LiDAR_Menu();
+  } else if (Input.Menu == Variable_Menu) {
+    Draw_Variable_Menu();
+  } else {
+    Draw_Default_Menu(Input, Front_Left, Front_Right, Back_Left, Back_Right);
   }
-  
-  // Default menu
-  else {
-    TFT.fillRect(94, 29, 53, 75, TFT_BLACK);
-    TFT.drawCircle(120, 67, 27, TFT_WHITE);
-    TFT.fillCircle(120 + Input.X * 17, 67 - Input.Y * 17, 5, TFT_RED);
 
-    TFT.fillRect(0, 0, 46, 135, TFT_BLACK);
-    TFT.setCursor(0, 25);
-    TFT.print(Front_Left);
-    TFT.setCursor(0, 90);
-    TFT.print(Back_Left);
-
-    TFT.fillRect(185, 0, 55, 135, TFT_BLACK);
-    TFT.setCursor(185, 25);
-    TFT.print(Front_Right);
-    TFT.setCursor(185, 90);
-    TFT.print(Back_Right);
-  }
+  Display_Sprite.pushSprite(0, 0);
 }
 
-// Colour blocked wheels and show the collision warning
+// Save collision state for the next complete display frame
 void Update_Collision_Display(bool Collision_Forward, bool Collision_Left,
   bool Collision_Right, bool Collision_Back) {
-  Draw_Wheel(Wheel_Left_X, Wheel_Front_Y, true,
-    Collision_Forward || Collision_Left ? TFT_RED : TFT_WHITE);
-  Draw_Wheel(Wheel_Right_X, Wheel_Front_Y, false,
-    Collision_Forward || Collision_Right ? TFT_RED : TFT_WHITE);
-  Draw_Wheel(Wheel_Left_X, Wheel_Back_Y, false,
-    Collision_Left || Collision_Back ? TFT_RED : TFT_WHITE);
-  Draw_Wheel(Wheel_Right_X, Wheel_Back_Y, true,
-    Collision_Right || Collision_Back ? TFT_RED : TFT_WHITE);
-
-  if (Collision_Forward || Collision_Left || Collision_Right || Collision_Back) {
-    TFT.setTextSize(2);
-    TFT.setTextDatum(MC_DATUM);
-    TFT.setTextColor(TFT_RED);
-    TFT.drawString("COLLISION ON!", 120, 120);
-  } else {
-    TFT.fillRect(40, 110, 160, 25, TFT_BLACK);
-  }
-  TFT.setTextColor(TFT_WHITE);
+  Display_Collision_Forward = Collision_Forward;
+  Display_Collision_Left = Collision_Left;
+  Display_Collision_Right = Collision_Right;
+  Display_Collision_Back = Collision_Back;
 }

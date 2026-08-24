@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Arduino.h>
 #include "controller_types.h"
 
 void Setup_Display();

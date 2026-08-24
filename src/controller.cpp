@@ -16,6 +16,9 @@ static HIDUniversal USB_HID(&USB_Host);
 static JoystickEvents Joystick;
 static JoystickReportParser Joystick_Parser(&Joystick);
 static ControllerMode Controller_Mode = Controller_USB;
+static DisplayMenus Current_Menu = Default_Menu;
+static int Previous_Button = 0;
+static bool USB_Host_Ready = false;
 
 // Map a value between two floating-point ranges
 static float Map_Value(float Value, float Input_Min, float Input_Max, float Output_Min, float Output_Max) {
@@ -28,9 +31,13 @@ void Setup_Controllers() {
   Ps3.begin(PS3_Address);
 
   SPI.begin(USB_Clock_Pin, USB_MISO_Pin, USB_MOSI_Pin, USB_SS_Pin);
-  if (USB_Host.Init() == -1) Serial.println("USB Host Shield failed");
+  USB_Host_Ready = USB_Host.Init() != -1;
+  if (!USB_Host_Ready) Serial.println("USB Host Shield failed");
   delay(200);
-  if (!USB_HID.SetReportParser(0, &Joystick_Parser)) Serial.println("Joystick parser failed");
+  if (!USB_HID.SetReportParser(0, &Joystick_Parser)) {
+    USB_Host_Ready = false;
+    Serial.println("Joystick parser failed");
+  }
 }
 
 // Service controllers and select the active input
@@ -41,6 +48,23 @@ void Update_Controllers() {
   if (Enable_Bluetooth && Bluetooth_Is_Active()) Controller_Mode = Controller_Bluetooth;
   else if (Ps3.isConnected()) Controller_Mode = Controller_PS3;
   else Controller_Mode = Controller_USB;
+}
+
+// Change  once when a menu button is pressed
+static void Update_Button(int Button) {
+  if (Button != 0 && Previous_Button == 0) {
+
+    // Display Menus
+    if (Button == 1) Current_Menu = Default_Menu;
+    if (Button == 2) Current_Menu = PSD_Info_Menu;
+    if (Button == 3) Current_Menu = LiDAR_Info_Menu;
+    if (Button == 4) Current_Menu = Variable_Menu;
+
+    // Other functions
+    if (Button == 5) Collision_Enabled = !Collision_Enabled;
+  }
+
+  Previous_Button = Button;
 }
 
 // Convert the active controller values to the common movement range
@@ -77,14 +101,10 @@ ControllerInput Read_Controller() {
 
   Input.Speed = constrain(Map_Value(Slider, 0, 255, 0, 1), 0, 1);
 
-  if (Button == 1) {
-    Input.Menu == Default_Menu;
-  }
-  if (Button == 2) {
-    Input.Menu == PSD_Info_Menu;
-  }
-
+  Update_Button(Button);
   Input.Button = Button;
+  Input.Menu = Current_Menu;
+
   return Input;
 }
 
@@ -94,4 +114,10 @@ ControllerMode Get_Controller_Mode() {
 
 unsigned long Get_Last_USB_Update() {
   return Joystick_Parser.Get_Last_Update_Time();
+}
+
+bool USB_Controller_Is_Valid() {
+  if (!USB_Host_Ready) return false;
+  if (!Joystick_Parser.Has_Valid_Data()) return false;
+  return millis() - Get_Last_USB_Update() <= Joystick_Timeout;
 }

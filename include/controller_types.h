@@ -1,4 +1,5 @@
 #pragma once
+
 enum ControllerMode {
   Controller_USB,
   Controller_Bluetooth,
@@ -7,7 +8,9 @@ enum ControllerMode {
 
 enum DisplayMenus {
   Default_Menu,
-  PSD_Info_Menu
+  PSD_Info_Menu,
+  LiDAR_Info_Menu,
+  Variable_Menu
 };
 
 struct ControllerInput {

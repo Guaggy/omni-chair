@@ -31,10 +31,14 @@ void Setup_Controllers() {
   Ps3.begin(PS3_Address);
 
   SPI.begin(USB_Clock_Pin, USB_MISO_Pin, USB_MOSI_Pin, USB_SS_Pin);
-  USB_Host_Ready = USB_Host.Init() != -1;
+
+  pinMode(USB_Interrupt_Pin, INPUT);
+
+  int8_t USB_Init_Result = USB_Host.Init();
+  USB_Host_Ready = USB_Init_Result == 0;
   if (!USB_Host_Ready) Serial.println("USB Host Shield failed");
   delay(200);
-  if (!USB_HID.SetReportParser(0, &Joystick_Parser)) {
+  if (USB_Host_Ready && !USB_HID.SetReportParser(0, &Joystick_Parser)) {
     USB_Host_Ready = false;
     Serial.println("Joystick parser failed");
   }
@@ -80,9 +84,9 @@ ControllerInput Read_Controller() {
   Joystick.Get_Values(X_Value, Y_Value, Hat, Twist, Slider, Button);
 
   if (Controller_Mode == Controller_USB) {
-    if (X_Value < 499 || X_Value > 520) Input.X = Map_Value(X_Value, 0, 1023, -1, 1);
-    if (Y_Value < 499 || Y_Value > 520) Input.Y = Map_Value(Y_Value, 0, 1023, -1, 1);
-    if (Twist < 115 || Twist > 130) Input.Rotation = -Map_Value(Twist, 0, 255, -1, 1);
+    if (X_Value < 490 || X_Value > 530) Input.X = Map_Value(X_Value, 0, 1023, -1, 1);
+    if (Y_Value < 490 || Y_Value > 530) Input.Y = Map_Value(Y_Value, 0, 1023, -1, 1);
+    if (Twist < 115 || Twist > 135) Input.Rotation = -Map_Value(Twist, 0, 255, -1, 1);
   }
   if (Controller_Mode == Controller_Bluetooth) Input = Read_Bluetooth_Controller();
   if (Controller_Mode == Controller_PS3) {
@@ -91,15 +95,25 @@ ControllerInput Read_Controller() {
     Input.Rotation = Map_Value(-Ps3.data.analog.stick.rx, -128, 127, -1, 1);
   }
 
+  Input.Speed = constrain(Map_Value(Slider, 0, 255, 0, 1), 0, 1);
+
   if (Square_Inputs) {
     Input.X *= fabs(Input.X);
     Input.Y *= fabs(Input.Y);
     Input.Rotation *= fabs(Input.Rotation);
+    Input.Speed *= fabs(Input.Speed);
   }
-  if (fabs(Input.X) > fabs(Input.Y)) Input.Y = 0;
-  else Input.X = 0;
 
-  Input.Speed = constrain(Map_Value(Slider, 0, 255, 0, 1), 0, 1);
+  // limit joystick to horizontal, vertical and diagonals
+  float angle = atan2f(fabs(Input.Y), fabs(Input.X));
+  if (angle < PI/8) Input.Y = 0;
+  else if (angle > (3*PI)/8) Input.X = 0;
+  else {
+    float magnitude = max(fabs(Input.Y), fabs(Input.X));
+
+    Input.X = Input.X > 0 ? magnitude : -magnitude;
+    Input.Y = Input.Y > 0 ? magnitude : -magnitude;
+  }
 
   Update_Button(Button);
   Input.Button = Button;

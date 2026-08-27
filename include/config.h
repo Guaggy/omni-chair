@@ -9,6 +9,7 @@ const bool Debug_Joystick_Raw = false;
 // Controller settings
 const bool Square_Inputs = true;
 const bool Enable_Bluetooth = false;
+const bool Collision_Enabled_At_Start = false;
 extern bool Collision_Enabled;
 
 // Maximum motor command accepted by the Sabertooth
@@ -26,5 +27,12 @@ const unsigned long Bluetooth_Timeout = 60;
 // Display update time in milliseconds
 const unsigned long Display_Update_Time = 200;
 
+// Controllers
 const char PS3_Address[] = "00:00:00:00:00:00";
 const char Bluetooth_Name[] = "ODW";
+
+// PSD sensors
+const int sensor_max = 80;
+const int sensor_min = 10;
+const int sensor_average_num = 5;
+const int sensor_remove_spike_minmax_num = 1;

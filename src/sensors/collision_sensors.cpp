@@ -6,15 +6,9 @@
 #include "display/display.h"
 #include "safety/safety.h"
 
-bool Collision_Enabled = false;
-
-// Variables
-const int sensor_max = 80;
-const int sensor_min = 10;
+bool Collision_Enabled = Collision_Enabled_At_Start;
 
 // Filtering
-const int sensor_average_num = 5; // number of measurements
-const int sensor_remove_spike_minmax_num = 1; // number of highest/lowest values to remove
 int sensor_measurements[5][sensor_average_num];
 int sensor_measurement_count = 0;
 float sensor_average[5];

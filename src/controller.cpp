@@ -15,7 +15,7 @@ static USBHub USB_Hub(&USB_Host);
 static HIDUniversal USB_HID(&USB_Host);
 static JoystickEvents Joystick;
 static JoystickReportParser Joystick_Parser(&Joystick);
-static ControllerMode Controller_Mode = Controller_USB;
+static ControllerMode Controller_Mode = Controller_Mode_Default;
 static DisplayMenus Current_Menu = Default_Menu;
 static int Previous_Button = 0;
 static bool USB_Host_Ready = false;
@@ -66,6 +66,11 @@ static void Update_Button(int Button) {
 
     // Other functions
     if (Button == 5) Collision_Enabled = !Collision_Enabled;
+    if (Button == 6) {
+      if (Controller_Mode == Controller_USB) Controller_Mode = Controller_PS3;
+      else if (Controller_Mode == Controller_PS3) Controller_Mode = Controller_Bluetooth;
+      else Controller_Mode = Controller_USB;
+    }
   }
 
   Previous_Button = Button;

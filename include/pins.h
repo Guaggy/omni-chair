@@ -24,5 +24,5 @@ const int Sensor_Side_Right_Pin = 2;
 const int Sensor_Back_Pin = 39;
 
 // Lidar pins
-const int Lidar_RX_Pin = -1;
+const int Lidar_RX_Pin = 32;
 const int Lidar_TX_Pin = -1;

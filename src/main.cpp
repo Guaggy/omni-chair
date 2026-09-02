@@ -36,6 +36,6 @@ void loop() {
   Check_Collisions(Front_Left, Front_Right, Back_Left, Back_Right);
   Check_Lidar_Collisions(Front_Left, Front_Right, Back_Left, Back_Right);
   Update_Motor_Safety(Front_Left, Front_Right, Back_Left, Back_Right);
-  Update_Display(Input, Front_Left, Front_Right, Back_Left, Back_Right);
   Send_Motor_Speeds(Front_Left, Front_Right, Back_Left, Back_Right);
+  Update_Display(Input, Front_Left, Front_Right, Back_Left, Back_Right);
 }
